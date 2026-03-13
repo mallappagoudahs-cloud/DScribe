@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI-Powered Clinical Transcription</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #F4F6F9;
+      color: #333333;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1200px;
+      width: 100%;
+      padding: 24px 16px 32px;
+      margin: 0 auto;
+    }
+    .card {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 24px 24px 20px;
+      box-shadow: 0 12px 35px rgba(15, 23, 42, 0.08);
+      border: 1px solid #E1E5EE;
+    }
+    h1 {
+      font-size: 1.75rem;
+      margin-bottom: 0.25rem;
+      color: #0078D4;
+    }
+    h2 {
+      font-size: 1.2rem;
+      margin-top: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    p {
+      margin: 0.25rem 0 0.75rem;
+      color: #555555;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+      margin-top: 1rem;
+    }
+    .file-input {
+      flex: 1 1 260px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      border: 1px dashed #C5CEDD;
+      background: #ffffff;
+      color: #333333;
+    }
+    .btn {
+      border: none;
+      border-radius: 999px;
+      padding: 10px 18px;
+      cursor: pointer;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.15s ease;
+    }
+    .btn-primary {
+      background: #0078D4;
+      color: #ffffff;
+      box-shadow: 0 8px 20px rgba(0, 120, 212, 0.25);
+    }
+    .btn-secondary {
+      background: #ffffff;
+      color: #0078D4;
+      border: 1px solid #C5CEDD;
+    }
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: default;
+      box-shadow: none;
+      transform: none;
+    }
+    .btn:not(:disabled):hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 24px rgba(0, 120, 212, 0.28);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      background: rgba(0, 120, 212, 0.07);
+      color: #0078D4;
+      border: 1px solid rgba(0, 120, 212, 0.35);
+    }
+    .status {
+      margin-top: 0.75rem;
+      font-size: 0.85rem;
+      color: #555555;
+    }
+    .status-strong {
+      font-weight: 600;
+      color: #0078D4;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.5rem;
+      font-size: 0.85rem;
+    }
+    th, td {
+      border-bottom: 1px solid #E1E5EE;
+      padding: 8px 10px;
+      text-align: left;
+    }
+    th {
+      background-color: #0078D4;
+      color: white;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    tbody tr:hover {
+      background-color: #f1f1f1;
+      transform: scale(1.01);
+      transition: background-color 0.3s ease, transform 0.3s ease;
+    }
+    tbody tr:nth-child(even) {
+      background: #FAFBFE;
+    }
+    .section {
+      margin-top: 1.5rem;
+      padding: 16px;
+      border-radius: 12px;
+      background: #ffffff;
+      border: 1px solid #E1E5EE;
+    }
+    .tag-unclear {
+      color: #FFC107;
+      font-weight: 600;
+    }
+    .pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #E9F4FF;
+      border: 1px solid #C5E1FF;
+      font-size: 0.75rem;
+      color: #0078D4;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 2.2fr) minmax(260px, 0.9fr);
+      gap: 16px;
+      margin-top: 1rem;
+    }
+    .sidebar {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 16px 14px;
+      border: 1px solid #E1E5EE;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+      height: fit-content;
+    }
+    .sidebar-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      color: #0078D4;
+    }
+    .sidebar-subtitle {
+      font-size: 0.8rem;
+      color: #666666;
+      margin-bottom: 0.75rem;
+    }
+    .suggestion {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 0.82rem;
+      margin-bottom: 0.45rem;
+      color: #444444;
+    }
+    .suggestion-icon {
+      margin-top: 3px;
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+    }
+    .suggestion-icon.warn {
+      background: #FFF8E1;
+      color: #FFC107;
+      border: 1px solid #FFE082;
+    }
+    .suggestion-icon.ok {
+      background: #E8F5E9;
+      color: #28A745;
+      border: 1px solid #A5D6A7;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: #E9F4FF;
+      border: 1px solid #C5E1FF;
+      font-size: 0.75rem;
+      color: #0078D4;
+    }
+    .chip-secondary {
+      background: #E7F5EC;
+      border-color: #B4E1C1;
+      color: #28A745;
+    }
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .actions-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .loader-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(248, 250, 252, 0.82);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 40;
+    }
+    .loader-card {
+      background: #ffffff;
+      padding: 20px 24px;
+      border-radius: 16px;
+      box-shadow: 0 20px 45px rgba(15, 23, 42, 0.18);
+      border: 1px solid #E1E5EE;
+      text-align: center;
+      max-width: 320px;
+    }
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      border: 3px solid #E1E5EE;
+      border-top-color: #0078D4;
+      animation: spin 0.75s linear infinite;
+      margin: 0 auto 10px;
+    }
+    .progress-text {
+      font-size: 0.9rem;
+      margin-bottom: 4px;
+      color: #333333;
+    }
+    .progress-sub {
+      font-size: 0.8rem;
+      color: #666666;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-top: 6px;
+      font-size: 0.8rem;
+    }
+    .toolbar input[type="search"],
+    .toolbar select {
+      padding: 5px 8px;
+      border-radius: 999px;
+      border: 1px solid #C5CEDD;
+      font-size: 0.8rem;
+      background: #ffffff;
+      color: #333333;
+    }
+    .pagination {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 6px;
+      margin-top: 6px;
+      font-size: 0.78rem;
+      color: #555555;
+    }
+    .pagination button {
+      border-radius: 999px;
+      border: 1px solid #C5CEDD;
+      background: #ffffff;
+      padding: 3px 8px;
+      cursor: pointer;
+      font-size: 0.78rem;
+      color: #333333;
+    }
+    .pill-success {
+      background: #E7F5EC;
+      border-color: #B4E1C1;
+      color: #28A745;
+    }
+    .pill-warning {
+      background: #FFF8E1;
+      border-color: #FFE082;
+      color: #FFC107;
+    }
+    .editable-input {
+      width: 100%;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      padding: 3px 6px;
+      font-size: 0.8rem;
+      background: #ffffff;
+    }
+    .editable-input[data-unclear="true"] {
+      border-color: #FFC107;
+      background: #FFF8E1;
+    }
+    .history-list {
+      margin-top: 8px;
+      font-size: 0.8rem;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+    .history-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      margin-bottom: 4px;
+    }
+    .history-item.active {
+      border-color: #0078D4;
+      background: #E9F4FF;
+    }
+    .history-item:hover {
+      background: #F4F6F9;
+    }
+    .history-name {
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .badge-small {
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #E1E5EE;
+      color: #555555;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    @media (max-width: 700px) {
+      .card {
+        padding: 18px;
+      }
+      h1 {
+        font-size: 1.4rem;
+      }
+      table {
+        font-size: 0.8rem;
+      }
+      .row {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="loader-overlay" id="loaderOverlay">
+    <div class="loader-card">
+      <div class="spinner"></div>
+      <div class="progress-text" id="loaderText">Processing your document, please wait…</div>
+      <div class="progress-sub" id="loaderSubText">Uploading file and running OCR.</div>
+    </div>
+  </div>
+  <div class="container">
+    <div class="card">
+      <div class="top-bar">
+        <div>
+          <h1>AI-Powered Clinical Transcription</h1>
+          <p>Upload handwritten or typed patient PDFs for automated Nursing Alerts and MRD compliance auditing.</p>
+        </div>
+        <span class="badge">
+          <span style="width:7px;height:7px;border-radius:999px;background:#28A745;"></span>
+          Real-time OCR &amp; MRD Audit
+        </span>
+      </div>
+
+      <form id="uploadForm">
+        <div class="row">
+          <input type="file" id="fileInput" class="file-input" accept="application/pdf" multiple />
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;">
+            <button type="submit" class="btn btn-primary" id="processBtn">
+              ▶ Upload &amp; Generate
+            </button>
+            <span style="font-size:0.75rem;color:#777777;">Supports multi-page and multiple PDF documents.</span>
+          </div>
+        </div>
+      </form>
+      <div class="status" id="statusText">
+        <span class="status-strong">Idle.</span> Waiting for one or more PDF uploads.
+      </div>
+
+      <div class="layout" style="margin-top:1.25rem;">
+        <div>
+          <div id="results" style="display:none;">
+            <div class="section">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+                <div>
+                  <h2>Nursing Alerts</h2>
+                  <p>Extracted medications with dosage, route, frequency and alert times. Edit unclear fields before export.</p>
+                </div>
+                <div class="chip" id="confidenceChip" style="display:none;">
+                  <span>Confidence:</span>
+                  <strong id="confidenceValue">–</strong>
+                </div>
+              </div>
+              <div class="toolbar">
+                <div>
+                  <span style="font-weight:600;font-size:0.78rem;">Search</span>
+                  <input type="search" id="alertsSearch" placeholder="Drug name, route, frequency…" />
+                </div>
+                <div>
+                  <span style="font-weight:600;font-size:0.78rem;">Per page</span>
+                  <select id="alertsPageSize">
+                    <option value="5">5</option>
+                    <option value="10" selected>10</option>
+                    <option value="20">20</option>
+                  </select>
+                </div>
+              </div>
+              <div style="overflow:auto;max-height:260px;margin-top:0.5rem;">
+                <table id="alertsTable">
+                  <thead>
+                    <tr>
+                      <th>Drug Name</th>
+                      <th>Dosage</th>
+                      <th>Route</th>
+                      <th>Frequency</th>
+                      <th>Duration (days)</th>
+                      <th>Alert Times</th>
+                      <th>Row Confidence</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <div class="pagination" id="alertsPagination" style="display:none;">
+                <button type="button" id="alertsPrev">&lt;</button>
+                <span id="alertsPageInfo">Page 1 / 1</span>
+                <button type="button" id="alertsNext">&gt;</button>
+              </div>
+            </div>
+
+            <div class="section">
+              <h2>MRD Compliance Audit</h2>
+              <p>Page-by-page MRD compliance with filters for quick review.</p>
+              <div class="toolbar">
+                <div>
+                  <span style="font-weight:600;font-size:0.78rem;">Checklist</span>
+                  <select id="mrdChecklistFilter">
+                    <option value="">All</option>
+                  </select>
+                </div>
+                <div>
+                  <span style="font-weight:600;font-size:0.78rem;">Comment</span>
+                  <select id="mrdCommentFilter">
+                    <option value="">All</option>
+                    <option value="Present">Present</option>
+                    <option value="Missing">Missing</option>
+                    <option value="Missing Doctor Signature">Missing Doctor Signature</option>
+                    <option value="Incomplete Date">Incomplete Date</option>
+                  </select>
+                </div>
+                </div>
+              </div>
+              <div style="overflow:auto;max-height:260px;margin-top:0.5rem;">
+                <table id="mrdTable">
+                  <thead>
+                    <tr>
+                      <th>Checklist Name</th>
+                      <th>Comment</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="actions-row">
+              <button type="button" class="btn btn-secondary" id="downloadJsonBtn">
+                ⬇ Download JSON (All)
+              </button>
+              <button type="button" class="btn btn-secondary" id="downloadAlertsJsonBtn">
+                ⬇ Nursing Alerts JSON
+              </button>
+              <button type="button" class="btn btn-secondary" id="downloadMrdJsonBtn">
+                ⬇ MRD Audit JSON
+              </button>
+              <button type="button" class="btn btn-secondary" id="downloadCsvBtn">
+                ⬇ Download CSV
+              </button>
+              <button type="button" class="btn btn-secondary" id="downloadPdfBtn">
+                ⬇ Download PDF
+              </button>
+              <button type="button" class="btn btn-secondary" id="saveCloudBtn">
+                ☁ Save to Cloud
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="sidebar">
+          <div class="sidebar-title">AI Suggestions &amp; Warnings</div>
+          <div class="sidebar-subtitle">
+            Recommendations based on extracted medications and MRD audit. Use them to tighten clinical safety and documentation.
+          </div>
+          <div id="suggestionsList"></div>
+
+          <div style="margin-top:1rem;border-top:1px solid #E1E5EE;padding-top:10px;">
+            <div style="font-size:0.9rem;font-weight:600;margin-bottom:6px;">Live JSON Preview</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+              <button type="button" class="btn btn-secondary" id="showAlertsJsonBtn">Show Alerts JSON</button>
+              <button type="button" class="btn btn-secondary" id="showMrdJsonBtn">Show MRD JSON</button>
+              <button type="button" class="btn btn-secondary" id="copyJsonBtn">Copy JSON</button>
+            </div>
+            <textarea id="jsonPreview" readonly style="width:100%;min-height:180px;resize:vertical;border-radius:12px;border:1px solid #C5CEDD;padding:10px;font-size:0.78rem;line-height:1.2;background:#FAFBFE;color:#333333;"></textarea>
+            <div style="font-size:0.75rem;color:#666666;margin-top:6px;">
+              This JSON updates as you edit fields in the tables.
+            </div>
+          </div>
+
+          <div style="margin-top:1rem;border-top:1px solid #E1E5EE;padding-top:10px;">
+            <div style="font-size:0.9rem;font-weight:600;margin-bottom:4px;">Session History</div>
+            <div style="font-size:0.78rem;color:#666666;margin-bottom:4px;">Recently processed documents (local to this browser).</div>
+            <div class="history-list" id="historyList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('uploadForm');
+    const fileInput = document.getElementById('fileInput');
+    const processBtn = document.getElementById('processBtn');
+    const downloadJsonBtn = document.getElementById('downloadJsonBtn');
+    const downloadAlertsJsonBtn = document.getElementById('downloadAlertsJsonBtn');
+    const downloadMrdJsonBtn = document.getElementById('downloadMrdJsonBtn');
+    const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+    const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+    const saveCloudBtn = document.getElementById('saveCloudBtn');
+
+    const statusText = document.getElementById('statusText');
+    const results = document.getElementById('results');
+    const alertsTableBody = document.querySelector('#alertsTable tbody');
+    const mrdTableBody = document.querySelector('#mrdTable tbody');
+    const alertsSearch = document.getElementById('alertsSearch');
+    const alertsPageSizeSelect = document.getElementById('alertsPageSize');
+    const alertsPagination = document.getElementById('alertsPagination');
+    const alertsPrev = document.getElementById('alertsPrev');
+    const alertsNext = document.getElementById('alertsNext');
+    const alertsPageInfo = document.getElementById('alertsPageInfo');
+    const mrdChecklistFilter = document.getElementById('mrdChecklistFilter');
+    const mrdCommentFilter = document.getElementById('mrdCommentFilter');
+    const mrdPageFilter = document.getElementById('mrdPageFilter');
+    const confidenceChip = document.getElementById('confidenceChip');
+    const confidenceValue = document.getElementById('confidenceValue');
+    const suggestionsList = document.getElementById('suggestionsList');
+    const historyList = document.getElementById('historyList');
+    const loaderOverlay = document.getElementById('loaderOverlay');
+    const loaderText = document.getElementById('loaderText');
+    const loaderSubText = document.getElementById('loaderSubText');
+    const showAlertsJsonBtn = document.getElementById('showAlertsJsonBtn');
+    const showMrdJsonBtn = document.getElementById('showMrdJsonBtn');
+    const copyJsonBtn = document.getElementById('copyJsonBtn');
+    const jsonPreview = document.getElementById('jsonPreview');
+
+    let sessionHistory = [];
+    let activeHistoryId = null;
+
+    let currentAlerts = [];
+    let currentMrd = [];
+    let currentMeta = null;
+    let jsonPreviewMode = 'alerts'; // 'alerts' | 'mrd'
+
+    let alertsPage = 1;
+    let alertsPageSize = parseInt(alertsPageSizeSelect.value, 10) || 10;
+
+    function setLoading(loading, message, subMessage) {
+      processBtn.disabled = loading;
+      if (downloadJsonBtn) downloadJsonBtn.disabled = loading;
+      if (downloadAlertsJsonBtn) downloadAlertsJsonBtn.disabled = loading;
+      if (downloadMrdJsonBtn) downloadMrdJsonBtn.disabled = loading;
+      if (downloadCsvBtn) downloadCsvBtn.disabled = loading;
+      if (downloadPdfBtn) downloadPdfBtn.disabled = loading;
+      if (saveCloudBtn) saveCloudBtn.disabled = loading;
+
+      if (loading) {
+        loaderOverlay.style.display = 'flex';
+        loaderText.textContent = message || 'Processing your document, please wait…';
+        loaderSubText.textContent = subMessage || 'Uploading file and running OCR.';
+      } else {
+        loaderOverlay.style.display = 'none';
+      }
+    }
+
+    function updateStatus(main, secondary) {
+      statusText.innerHTML = `<span class="status-strong">${main}</span>${secondary ? ' ' + secondary : ''}`;
+    }
+
+    function applyProgressSequence() {
+      loaderText.textContent = 'Processing the uploaded file. Please wait…';
+      loaderSubText.textContent = 'Running OCR and extracting raw text.';
+      setTimeout(() => {
+        loaderText.textContent = 'Extracting patient information…';
+        loaderSubText.textContent = 'Identifying drug chart and MRD checklist regions.';
+      }, 700);
+      setTimeout(() => {
+        loaderText.textContent = 'Analyzing medication details…';
+        loaderSubText.textContent = 'Structuring drug name, dosage, route, and frequency.';
+      }, 1400);
+      setTimeout(() => {
+        loaderText.textContent = 'Auditing MRD compliance…';
+        loaderSubText.textContent = 'Checking labels, signatures, and consultation dates.';
+      }, 2100);
+    }
+
+    function buildEditableAlerts(rawAlerts) {
+      return (rawAlerts || []).map((row, idx) => {
+        const makeEditable = (value) => {
+          const isUnclear = typeof value === 'string' && value.includes('[UNCLEAR]');
+          return {
+            value: isUnclear ? '' : (value || ''),
+            unclear: isUnclear,
+          };
+        };
+        return {
+          _id: idx,
+          drug_name: makeEditable(row.drug_name),
+          dosage: makeEditable(row.dosage),
+          route: makeEditable(row.route),
+          frequency: makeEditable(row.frequency),
+          duration_days: row.duration_days,
+          alert_times: row.alert_times || [],
+          confidence: row.confidence != null ? row.confidence : 1.0,
+        };
+      });
+    }
+
+    function buildEditableMrd(rawMrd) {
+      return (rawMrd || []).map((row, idx) => {
+        const comment = (row.comment || '').trim();
+        const base =
+          comment === 'Present' ? 'Present' :
+          comment === 'Missing' ? 'Missing' :
+          comment === 'Missing Doctor Signature' ? 'Missing Doctor Signature' :
+          comment === 'Incomplete' ? 'Incomplete' :
+          comment === 'Incomplete Date' ? 'Incomplete Date' :
+          // Allow legacy comment strings to map to closest status.
+          (comment.toLowerCase().includes('missing doctor') ? 'Missing Doctor Signature' :
+           comment.toLowerCase().includes('incomplete date') ? 'Incomplete Date' :
+           comment.toLowerCase().includes('incomplete') ? 'Incomplete' :
+           comment.toLowerCase().includes('missing') ? 'Missing' : 'Present');
+
+        // If the original comment contains extra detail, keep it as a note.
+        let note = '';
+        if (comment && comment !== base) {
+          note = comment;
+        }
+
+        return {
+          _id: idx,
+          checklist_name: row.checklist_name,
+          status: base,
+          note,
+        };
+      });
+    }
+
+    function getFilteredAlerts() {
+      const q = (alertsSearch.value || '').toLowerCase();
+      const source = currentAlerts || [];
+      if (!q) return source;
+      return source.filter(row => {
+        const fields = [
+          row.drug_name?.value,
+          row.dosage?.value,
+          row.route?.value,
+          row.frequency?.value,
+        ].map(v => (v || '').toLowerCase());
+        return fields.some(f => f.includes(q));
+      });
+    }
+
+    function renderAlertsTable() {
+      alertsTableBody.innerHTML = '';
+      const filtered = getFilteredAlerts();
+      const total = filtered.length;
+      alertsPageSize = parseInt(alertsPageSizeSelect.value, 10) || 10;
+      const totalPages = Math.max(1, Math.ceil(total / alertsPageSize));
+      alertsPage = Math.min(alertsPage, totalPages);
+      const start = (alertsPage - 1) * alertsPageSize;
+      const pageRows = filtered.slice(start, start + alertsPageSize);
+
+      pageRows.forEach((row, idx) => {
+        const tr = document.createElement('tr');
+        const globalIndex = start + idx;
+
+        const makeCell = (fieldKey, placeholder) => {
+          const cellData = row[fieldKey] || { value: '', unclear: false };
+          const td = document.createElement('td');
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.value = cellData.value || '';
+          input.placeholder = cellData.unclear ? '[UNCLEAR]' : placeholder;
+          input.className = 'editable-input';
+          if (cellData.unclear) input.dataset.unclear = 'true';
+          input.addEventListener('input', (e) => {
+            currentAlerts[globalIndex][fieldKey].value = e.target.value;
+            if (currentAlerts[globalIndex][fieldKey].unclear && e.target.value.trim()) {
+              currentAlerts[globalIndex][fieldKey].unclear = false;
+              e.target.removeAttribute('data-unclear');
+            }
+            updateJsonPreview();
+          });
+          td.appendChild(input);
+          return td;
+        };
+
+        tr.appendChild(makeCell('drug_name', 'Drug name'));
+        tr.appendChild(makeCell('dosage', '650 mg'));
+        tr.appendChild(makeCell('route', 'Oral / IV'));
+        tr.appendChild(makeCell('frequency', 'BD / OD'));
+
+        const tdDuration = document.createElement('td');
+        const durationInput = document.createElement('input');
+        durationInput.type = 'number';
+        durationInput.min = '0';
+        durationInput.className = 'editable-input';
+        durationInput.value = row.duration_days != null ? row.duration_days : '';
+        durationInput.placeholder = 'Days';
+        durationInput.addEventListener('input', (e) => {
+          const v = e.target.value;
+          currentAlerts[globalIndex].duration_days = v === '' ? null : Number(v);
+          updateJsonPreview();
+        });
+        tdDuration.appendChild(durationInput);
+        tr.appendChild(tdDuration);
+
+        const tdTimes = document.createElement('td');
+        const times = row.alert_times || [];
+        if (times.length) {
+          tdTimes.innerHTML = times.map(t => `<span class="pill">${t}</span>`).join(' ');
+        } else {
+          tdTimes.textContent = '—';
+        }
+        tr.appendChild(tdTimes);
+
+        const tdConf = document.createElement('td');
+        const pill = document.createElement('span');
+        pill.className = 'pill ' + (row.confidence >= 0.85 ? 'pill-success' : 'pill-warning');
+        pill.textContent = `${Math.round((row.confidence || 0) * 100)}%`;
+        tdConf.appendChild(pill);
+        tr.appendChild(tdConf);
+
+        alertsTableBody.appendChild(tr);
+      });
+
+      if (total > alertsPageSize) {
+        alertsPagination.style.display = 'flex';
+        alertsPageInfo.textContent = `Page ${alertsPage} / ${totalPages}`;
+      } else {
+        alertsPagination.style.display = 'none';
+      }
+    }
+
+    function renderMrdTable() {
+      mrdTableBody.innerHTML = '';
+      const checklistFilter = mrdChecklistFilter.value;
+      const commentFilter = mrdCommentFilter.value;
+      const rows = (currentMrd || []).filter(row => {
+        if (checklistFilter && row.checklist_name !== checklistFilter) return false;
+        if (commentFilter && row.status !== commentFilter) return false;
+        return true;
+      });
+
+      rows.forEach(row => {
+        const tr = document.createElement('tr');
+
+        const tdChecklist = document.createElement('td');
+        tdChecklist.textContent = row.checklist_name;
+        tr.appendChild(tdChecklist);
+
+        const tdComment = document.createElement('td');
+        const wrapper = document.createElement('div');
+        wrapper.style.display = 'flex';
+        wrapper.style.gap = '8px';
+        wrapper.style.alignItems = 'center';
+        wrapper.style.flexWrap = 'wrap';
+
+        const select = document.createElement('select');
+        select.className = 'editable-input';
+        select.style.maxWidth = '210px';
+        ['Present', 'Missing', 'Incomplete', 'Incomplete Date', 'Missing Doctor Signature'].forEach(optVal => {
+          const opt = document.createElement('option');
+          opt.value = optVal;
+          opt.textContent = optVal;
+          if (row.status === optVal) opt.selected = true;
+          select.appendChild(opt);
+        });
+        select.addEventListener('change', (e) => {
+          row.status = e.target.value;
+          // Re-render to update coloring/filtering effects.
+          renderMrdTable();
+          updateJsonPreview();
+        });
+
+        const noteInput = document.createElement('input');
+        noteInput.type = 'text';
+        noteInput.className = 'editable-input';
+        noteInput.placeholder = 'Optional note…';
+        noteInput.value = row.note || '';
+        noteInput.style.minWidth = '180px';
+        noteInput.addEventListener('input', (e) => {
+          row.note = e.target.value;
+          updateJsonPreview();
+        });
+
+        const pill = document.createElement('span');
+        const isWarn = row.status !== 'Present';
+        pill.className = 'pill ' + (isWarn ? 'pill-warning' : 'pill-success');
+        pill.textContent = row.status;
+
+        wrapper.appendChild(pill);
+        wrapper.appendChild(select);
+        wrapper.appendChild(noteInput);
+        tdComment.appendChild(wrapper);
+        tr.appendChild(tdComment);
+
+        mrdTableBody.appendChild(tr);
+      });
+    }
+
+    function populateMrdChecklistFilter() {
+      const items = new Set((currentMrd || []).map(r => r.checklist_name));
+      const existing = new Set();
+      Array.from(mrdChecklistFilter.options).forEach(opt => existing.add(opt.value));
+      items.forEach(c => {
+        if (!existing.has(c) && c) {
+          const opt = document.createElement('option');
+          opt.value = c;
+          opt.textContent = c;
+          mrdChecklistFilter.appendChild(opt);
+        }
+      });
+    }
+
+    function renderSuggestions(suggestions, confidence, warnings) {
+      suggestionsList.innerHTML = '';
+      if (!suggestions || !suggestions.length) {
+        const div = document.createElement('div');
+        div.className = 'suggestion';
+        div.innerHTML = `
+          <div class="suggestion-icon ok">✔</div>
+          <div>No critical issues detected. Review extracted data, then export or save to cloud.</div>
+        `;
+        suggestionsList.appendChild(div);
+        return;
+      }
+      suggestions.forEach(text => {
+        const lower = text.toLowerCase();
+        const isWarn = lower.includes('missing') || lower.includes('incomplete') || lower.includes('unclear') || lower.includes('low');
+        const div = document.createElement('div');
+        div.className = 'suggestion';
+        div.innerHTML = `
+          <div class="suggestion-icon ${isWarn ? 'warn' : 'ok'}">${isWarn ? '!' : '✔'}</div>
+          <div>${text}</div>
+        `;
+        suggestionsList.appendChild(div);
+      });
+    }
+
+    function upsertHistoryEntry(meta, alerts, mrd) {
+      const entry = {
+        id: Date.now().toString() + Math.random().toString(16).slice(2),
+        filename: meta.filename || 'document.pdf',
+        confidence: meta.confidence || 0,
+        timestamp: new Date().toISOString(),
+        alerts,
+        mrd,
+        suggestions: meta.suggestions || [],
+        warnings: meta.warnings || [],
+      };
+      sessionHistory.unshift(entry);
+      sessionHistory = sessionHistory.slice(0, 20);
+      activeHistoryId = entry.id;
+      renderHistory();
+    }
+
+    function renderHistory() {
+      historyList.innerHTML = '';
+      if (!sessionHistory.length) {
+        const div = document.createElement('div');
+        div.style.fontSize = '0.78rem';
+        div.style.color = '#777777';
+        div.textContent = 'No documents processed yet in this session.';
+        historyList.appendChild(div);
+        return;
+      }
+      sessionHistory.forEach(entry => {
+        const item = document.createElement('div');
+        item.className = 'history-item' + (entry.id === activeHistoryId ? ' active' : '');
+        const date = new Date(entry.timestamp);
+        const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        item.innerHTML = `
+          <div>
+            <div class="history-name">${entry.filename}</div>
+            <div style="font-size:0.7rem;color:#777777;">${timeStr}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">
+            <span class="badge-small">${Math.round((entry.confidence || 0) * 100)}%</span>
+            <span style="font-size:0.7rem;color:#999999;">${entry.alerts?.length || 0} alerts</span>
+          </div>
+        `;
+        item.addEventListener('click', () => {
+          activeHistoryId = entry.id;
+          currentAlerts = buildEditableAlerts(entry.alerts);
+          currentMrd = buildEditableMrd(entry.mrd || []);
+          currentMeta = {
+            filename: entry.filename,
+            confidence: entry.confidence,
+            suggestions: entry.suggestions,
+            warnings: entry.warnings,
+          };
+          if (currentMeta && typeof currentMeta.confidence === 'number') {
+            confidenceChip.style.display = 'inline-flex';
+            confidenceValue.textContent = `${Math.round(currentMeta.confidence * 100)}%`;
+          }
+          results.style.display = 'block';
+          alertsPage = 1;
+          renderAlertsTable();
+          populateMrdChecklistFilter();
+          renderMrdTable();
+          renderSuggestions(entry.suggestions, entry.confidence, entry.warnings);
+          renderHistory();
+          updateJsonPreview();
+        });
+        historyList.appendChild(item);
+      });
+    }
+
+    function renderResults(data) {
+      currentMeta = data || null;
+      currentAlerts = buildEditableAlerts(data.alerts || []);
+      currentMrd = buildEditableMrd(data.mrd_audit || []);
+
+      results.style.display = 'block';
+      alertsPage = 1;
+      renderAlertsTable();
+      populateMrdChecklistFilter();
+      renderMrdTable();
+
+      if (data && typeof data.confidence === 'number') {
+        confidenceChip.style.display = 'inline-flex';
+        confidenceValue.textContent = `${Math.round(data.confidence * 100)}%`;
+      } else {
+        confidenceChip.style.display = 'none';
+      }
+
+      renderSuggestions(data.suggestions || [], data.confidence || 0, data.warnings || []);
+      upsertHistoryEntry(data, data.alerts || [], data.mrd_audit || []);
+      updateJsonPreview();
+
+      const hasUnclear = (data.alerts || []).some(a =>
+        ['drug_name', 'dosage', 'route'].some(k => typeof a[k] === 'string' && a[k].includes('[UNCLEAR]'))
+      );
+      if (hasUnclear || (data.warnings || []).length) {
+        updateStatus('Completed with warnings.', 'Some fields were flagged as [UNCLEAR]. Please review highlighted cells before export.');
+      } else {
+        updateStatus('Completed.', 'Review extracted alerts and MRD audit, then export or save as needed.');
+      }
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const files = Array.from(fileInput.files || []);
+      if (!files.length) {
+        alert('Please select one or more PDF files first.');
+        return;
+      }
+      if (files.some(f => !f.name.toLowerCase().endsWith('.pdf'))) {
+        alert('Only PDF files are supported.');
+        return;
+      }
+
+      try {
+        setLoading(true, 'Processing your document, please wait…', 'Uploading file and running OCR.');
+        applyProgressSequence();
+        updateStatus('Processing…', 'Running OCR, extracting medications, and auditing MRD checklist.');
+
+        const processOne = async (file) => {
+          const formData = new FormData();
+          formData.append('file', file);
+          const res = await fetch('/process', {
+            method: 'POST',
+            body: formData
+          });
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(errText || 'Failed to process document');
+          }
+          return res.json();
+        };
+
+        const resultsArray = await Promise.all(files.map(processOne));
+        const last = resultsArray[resultsArray.length - 1];
+        renderResults(last);
+        setLoading(false);
+      } catch (err) {
+        console.error(err);
+        setLoading(false);
+        updateStatus('Processing failed.', 'See error message and try again with a clearer scan.');
+        alert('Error while processing document: ' + (err.message || err));
+      }
+    });
+
+    alertsSearch.addEventListener('input', () => {
+      alertsPage = 1;
+      renderAlertsTable();
+    });
+
+    alertsPageSizeSelect.addEventListener('change', () => {
+      alertsPage = 1;
+      renderAlertsTable();
+    });
+
+    alertsPrev.addEventListener('click', () => {
+      if (alertsPage > 1) {
+        alertsPage--;
+        renderAlertsTable();
+      }
+    });
+
+    alertsNext.addEventListener('click', () => {
+      const filtered = getFilteredAlerts();
+      const totalPages = Math.max(1, Math.ceil(filtered.length / alertsPageSize));
+      if (alertsPage < totalPages) {
+        alertsPage++;
+        renderAlertsTable();
+      }
+    });
+
+    mrdChecklistFilter.addEventListener('change', renderMrdTable);
+    mrdCommentFilter.addEventListener('change', renderMrdTable);
+
+    function getCurrentStructuredData() {
+      const alerts = (currentAlerts || []).map(row => {
+        const name = row.drug_name?.value?.trim() || (row.drug_name?.unclear ? '[UNCLEAR]' : '');
+        const dosage = row.dosage?.value?.trim() || (row.dosage?.unclear ? '[UNCLEAR]' : '');
+        const route = row.route?.value?.trim() || (row.route?.unclear ? '[UNCLEAR]' : '');
+        const freq = row.frequency?.value?.trim() || (row.frequency?.unclear ? '[UNCLEAR]' : '');
+        return {
+          drug_name: name || '[UNCLEAR]',
+          dosage: dosage || '[UNCLEAR]',
+          route: route || '[UNCLEAR]',
+          frequency: freq || '[UNCLEAR]',
+          duration_days: row.duration_days != null ? row.duration_days : null,
+          alert_times: row.alert_times || [],
+          confidence: row.confidence || 0,
+        };
+      });
+      const mrd_audit = (currentMrd || []).map(row => {
+        const base = row.status || 'Present';
+        const note = (row.note || '').trim();
+        const comment = note ? `${base} - ${note}` : base;
+        return {
+          checklist_name: row.checklist_name,
+          comment,
+        };
+      });
+
+      return {
+        filename: currentMeta?.filename || 'document.pdf',
+        alerts,
+        mrd_audit,
+        confidence: currentMeta?.confidence || 0,
+        warnings: currentMeta?.warnings || [],
+        suggestions: currentMeta?.suggestions || [],
+        evaluation_criteria: currentMeta?.evaluation_criteria || null,
+        evaluation: currentMeta?.evaluation || null,
+      };
+    }
+
+    function getCurrentAlertsOnlyData() {
+      const all = getCurrentStructuredData();
+      return {
+        filename: all.filename,
+        alerts: all.alerts,
+        confidence: all.confidence,
+        warnings: all.warnings,
+        suggestions: all.suggestions,
+        evaluation_criteria: all.evaluation_criteria,
+        evaluation: all.evaluation,
+      };
+    }
+
+    function getCurrentMrdOnlyData() {
+      const all = getCurrentStructuredData();
+      return {
+        filename: all.filename,
+        mrd_audit: all.mrd_audit,
+        confidence: all.confidence,
+        warnings: all.warnings,
+        suggestions: all.suggestions,
+        evaluation_criteria: all.evaluation_criteria,
+        evaluation: all.evaluation,
+      };
+    }
+
+    function updateJsonPreview() {
+      if (!jsonPreview) return;
+      if (!currentMeta) {
+        jsonPreview.value = '';
+        return;
+      }
+      const obj = jsonPreviewMode === 'mrd' ? getCurrentMrdOnlyData() : getCurrentAlertsOnlyData();
+      jsonPreview.value = JSON.stringify(obj, null, 2);
+    }
+
+    showAlertsJsonBtn.addEventListener('click', () => {
+      jsonPreviewMode = 'alerts';
+      updateJsonPreview();
+    });
+
+    showMrdJsonBtn.addEventListener('click', () => {
+      jsonPreviewMode = 'mrd';
+      updateJsonPreview();
+    });
+
+    copyJsonBtn.addEventListener('click', async () => {
+      try {
+        updateJsonPreview();
+        const text = jsonPreview.value || '';
+        if (!text) {
+          alert('No JSON available yet. Process a document first.');
+          return;
+        }
+        await navigator.clipboard.writeText(text);
+        alert('JSON copied to clipboard.');
+      } catch (e) {
+        alert('Copy failed. Your browser may block clipboard access.');
+      }
+    });
+
+    downloadJsonBtn.addEventListener('click', () => {
+      if (!currentAlerts.length && !currentMrd.length) {
+        alert('No results available to export yet.');
+        return;
+      }
+      const data = getCurrentStructuredData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const base = (data.filename || 'result').replace(/\.pdf$/i, '') || 'result';
+      a.download = base + '_alerts_mrd.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    });
+
+    downloadAlertsJsonBtn.addEventListener('click', () => {
+      if (!currentAlerts.length) {
+        alert('No Nursing Alerts available to export yet.');
+        return;
+      }
+      const data = getCurrentAlertsOnlyData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const base = (data.filename || 'result').replace(/\.pdf$/i, '') || 'result';
+      a.download = base + '_nursing_alerts.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    });
+
+    downloadMrdJsonBtn.addEventListener('click', () => {
+      if (!currentMrd.length) {
+        alert('No MRD Audit data available to export yet.');
+        return;
+      }
+      const data = getCurrentMrdOnlyData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const base = (data.filename || 'result').replace(/\.pdf$/i, '') || 'result';
+      a.download = base + '_mrd_audit.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    });
+
+    downloadCsvBtn.addEventListener('click', () => {
+      if (!currentAlerts.length && !currentMrd.length) {
+        alert('No results available to export yet.');
+        return;
+      }
+      const data = getCurrentStructuredData();
+
+      const escapeCsv = (v) => {
+        if (v == null) return '';
+        const s = String(v);
+        if (/[",\n]/.test(s)) {
+          return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+      };
+
+      const alertsHeaders = ['Drug Name', 'Dosage', 'Route', 'Frequency', 'Duration (days)', 'Alert Times', 'Row Confidence'];
+      const alertsLines = [alertsHeaders.join(',')];
+      (data.alerts || []).forEach(a => {
+        alertsLines.push([
+          escapeCsv(a.drug_name),
+          escapeCsv(a.dosage),
+          escapeCsv(a.route),
+          escapeCsv(a.frequency),
+          escapeCsv(a.duration_days != null ? a.duration_days : ''),
+          escapeCsv((a.alert_times || []).join(' ')),
+          escapeCsv(Math.round((a.confidence || 0) * 100) + '%'),
+        ].join(','));
+      });
+      const alertsCsv = alertsLines.join('\n');
+
+      const mrdHeaders = ['Checklist Name', 'Comment'];
+      const mrdLines = [mrdHeaders.join(',')];
+      (data.mrd_audit || []).forEach(m => {
+        mrdLines.push([
+          escapeCsv(m.checklist_name),
+          escapeCsv(m.comment),
+        ].join(','));
+      });
+      const mrdCsv = mrdLines.join('\n');
+
+      const base = (data.filename || 'result').replace(/\.pdf$/i, '') || 'result';
+
+      const blobAlerts = new Blob([alertsCsv], { type: 'text/csv' });
+      const urlAlerts = window.URL.createObjectURL(blobAlerts);
+      const a1 = document.createElement('a');
+      a1.href = urlAlerts;
+      a1.download = base + '_alerts.csv';
+      document.body.appendChild(a1);
+      a1.click();
+      a1.remove();
+      window.URL.revokeObjectURL(urlAlerts);
+
+      const blobMrd = new Blob([mrdCsv], { type: 'text/csv' });
+      const urlMrd = window.URL.createObjectURL(blobMrd);
+      const a2 = document.createElement('a');
+      a2.href = urlMrd;
+      a2.download = base + '_mrd.csv';
+      document.body.appendChild(a2);
+      a2.click();
+      a2.remove();
+      window.URL.revokeObjectURL(urlMrd);
+    });
+
+    downloadPdfBtn.addEventListener('click', () => {
+      if (!currentAlerts.length && !currentMrd.length) {
+        alert('No results available to export yet.');
+        return;
+      }
+      const data = getCurrentStructuredData();
+      const base = (data.filename || 'result').replace(/\.pdf$/i, '') || 'result';
+
+      const { jsPDF } = window.jspdf || {};
+      if (!jsPDF) {
+        alert('PDF export library could not be loaded.');
+        return;
+      }
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+      let y = 40;
+
+      doc.setFontSize(14);
+      doc.text('Nursing Alerts & MRD Audit', 40, y);
+      y += 18;
+      doc.setFontSize(10);
+      doc.text(`Source document: ${base}`, 40, y);
+      y += 18;
+      doc.text(`Overall confidence: ${Math.round((data.confidence || 0) * 100)}%`, 40, y);
+      y += 24;
+
+      doc.setFontSize(12);
+      doc.text('Nursing Alerts', 40, y);
+      y += 16;
+      doc.setFontSize(9);
+      (data.alerts || []).forEach(a => {
+        const line = `${a.drug_name} | ${a.dosage} | ${a.route} | ${a.frequency} | ${a.duration_days || '-'} days | ${(a.alert_times || []).join(' ')} | ${Math.round((a.confidence || 0) * 100)}%`;
+        const split = doc.splitTextToSize(line, 520);
+        if (y + split.length * 12 > 780) {
+          doc.addPage();
+          y = 40;
+        }
+        doc.text(split, 40, y);
+        y += split.length * 12 + 4;
+      });
+
+      y += 10;
+      if (y > 760) {
+        doc.addPage();
+        y = 40;
+      }
+      doc.setFontSize(12);
+      doc.text('MRD Compliance Audit', 40, y);
+      y += 16;
+      doc.setFontSize(9);
+      (data.mrd_audit || []).forEach(m => {
+        const line = `${m.checklist_name}: ${m.comment}`;
+        const split = doc.splitTextToSize(line, 520);
+        if (y + split.length * 12 > 780) {
+          doc.addPage();
+          y = 40;
+        }
+        doc.text(split, 40, y);
+        y += split.length * 12 + 4;
+      });
+
+      y += 10;
+      if (y > 760) {
+        doc.addPage();
+        y = 40;
+      }
+      doc.setFontSize(12);
+      doc.text('AI Suggestions', 40, y);
+      y += 16;
+      doc.setFontSize(9);
+      (data.suggestions || []).forEach(s => {
+        const split = doc.splitTextToSize('- ' + s, 520);
+        if (y + split.length * 12 > 780) {
+          doc.addPage();
+          y = 40;
+        }
+        doc.text(split, 40, y);
+        y += split.length * 12 + 4;
+      });
+
+      doc.save(base + '_alerts_mrd.pdf');
+    });
+
+    saveCloudBtn.addEventListener('click', () => {
+      if (!currentAlerts.length && !currentMrd.length) {
+        alert('No results available to save yet.');
+        return;
+      }
+      alert('Cloud save integration point: connect this button to your Google Drive, Dropbox, or hospital PACS API to store the generated JSON/CSV/PDF.');
+    });
+
+    updateStatus('Idle.', 'Waiting for one or more PDF uploads.');
+    renderHistory();
+  </script>
+</body>
+</html>
+
