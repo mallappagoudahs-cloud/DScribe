@@ -10,6 +10,8 @@ from pydantic import BaseModel
 import pdfplumber
 from pdf2image.exceptions import PDFInfoNotInstalledError
 import pytesseract
+from pytesseract.pytesseract import TesseractNotFoundError
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 from PIL import Image, ImageEnhance, ImageOps
 from thefuzz import fuzz, process
 
@@ -121,40 +123,53 @@ def is_unclear_token(token: str) -> bool:
     return alnum_ratio < 0.4
 
 
-def extract_text_pdf(
-    pdf_bytes: bytes,
+def extract_text_file(
+    file_bytes: bytes,
+    filename: str,
 ) -> Tuple[List[str], bool, int, Optional[str], Optional[float]]:
     """
     Returns (page_texts, used_ocr, empty_page_count, ocr_error, ocr_avg_word_confidence).
-    used_ocr is True when we had to rely on OCR instead of embedded text.
     """
     page_texts: List[str] = []
     used_ocr = False
     ocr_error: Optional[str] = None
     ocr_avg_word_confidence: Optional[float] = None
+    
+    is_pdf = filename.lower().endswith(".pdf")
 
-    try:
-        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-            for page in pdf.pages:
-                txt = page.extract_text() or ""
-                page_texts.append(clean_text(txt))
-    except Exception:
-        page_texts = []
+    if is_pdf:
+        try:
+            with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                for page in pdf.pages:
+                    txt = page.extract_text() or ""
+                    page_texts.append(clean_text(txt))
+        except Exception:
+            page_texts = []
 
-    if any(t.strip() for t in page_texts):
-        empty_pages = sum(1 for t in page_texts if not t.strip())
-        return page_texts, used_ocr, empty_pages, ocr_error, ocr_avg_word_confidence
+        if any(t.strip() for t in page_texts):
+            empty_pages = sum(1 for t in page_texts if not t.strip())
+            return page_texts, used_ocr, empty_pages, ocr_error, ocr_avg_word_confidence
 
-    try:
-        images: List[Image.Image] = convert_from_bytes(pdf_bytes, dpi=300, poppler_path=r"e:\DScribe\.poppler\poppler-24.08.0\Library\bin")
-    except Exception as e:
-        # Poppler isn't installed or configured correctly; fallback
-        used_ocr = True
-        ocr_error = (
-            f"OCR fallback requires Poppler. Error: {str(e)}. "
-            "Ensure Poppler is installed and configured in poppler_path."
-        )
-        return [""], used_ocr, 1, ocr_error, ocr_avg_word_confidence
+        try:
+            images: List[Image.Image] = convert_from_bytes(file_bytes, dpi=300, poppler_path=r"e:\DScribe\.poppler\poppler-24.08.0\Library\bin")
+        except Exception as e:
+            # Poppler isn't installed or configured correctly; fallback
+            used_ocr = True
+            ocr_error = (
+                f"OCR fallback requires Poppler. Error: {str(e)}. "
+                "Ensure Poppler is installed and configured in poppler_path."
+            )
+            return [""], used_ocr, 1, ocr_error, ocr_avg_word_confidence
+    else:
+        try:
+            img = Image.open(io.BytesIO(file_bytes))
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            images = [img]
+        except Exception as e:
+            used_ocr = True
+            ocr_error = f"Failed to open image file. Error: {str(e)}"
+            return [""], used_ocr, 1, ocr_error, ocr_avg_word_confidence
 
     page_texts = []
     used_ocr = True
@@ -175,8 +190,16 @@ def extract_text_pdf(
         # (Optional Binarization - simple threshold via Pillow)
         # binary_img = enhanced_img.point(lambda p: p > 128 and 255)
 
-        raw = pytesseract.image_to_string(enhanced_img, config=custom_config)
-        page_texts.append(clean_text(raw))
+        try:
+            raw = pytesseract.image_to_string(enhanced_img, config=custom_config)
+            page_texts.append(clean_text(raw))
+        except TesseractNotFoundError:
+            used_ocr = True
+            ocr_error = "Tesseract OCR is not installed or not in PATH. Please install Tesseract-OCR."
+            return [""], used_ocr, 1, ocr_error, ocr_avg_word_confidence
+        except Exception as e:
+            raw = ""
+            pass
         
         try:
             data = pytesseract.image_to_data(enhanced_img, config=custom_config, output_type=pytesseract.Output.DICT)
@@ -285,32 +308,75 @@ def _canon_freq(text: str) -> Optional[str]:
     return None
 
 
+def _split_text_into_drug_segments(text: str) -> List[str]:
+    """
+    Split OCR text (which may be one huge line) into per-drug segments.
+    Strategy: split on dosage-like boundaries: a number followed by mg/ml/g,
+    then capture everything up to the next such boundary.
+    Also split on numbered lines (e.g. "1. ", "2. ") and on common drug form tokens.
+    """
+    # First try splitting on newlines as usual
+    parts = [p.strip() for p in text.split("\n") if p.strip()]
+
+    result = []
+    for part in parts:
+        # If this chunk is short enough, keep as-is
+        if len(part) < 120:
+            result.append(part)
+            continue
+
+        # Long line: split on dosage-looking boundaries
+        # Pattern: look for "WORD WORD <dosage>" sequences
+        # We split just before a digit+unit pattern that's preceded by a letter (drug name end)
+        # e.g. "PARACETAMOL 500mg ... AMOXICILLIN 250mg" -> two segments
+        segments = re.split(
+            r'(?<=[a-zA-Z\)])(?=\s+\d+(?:\.\d+)?\s*(?:mg|ml|g|mcg|cc|drops?|units?)\b)',
+            part,
+            flags=re.IGNORECASE
+        )
+        if len(segments) > 1:
+            result.extend([s.strip() for s in segments if s.strip()])
+        else:
+            # Try splitting on numbered list markers: "1.", "2." etc. (often in prescription sheets)
+            segments2 = re.split(r'(?<!\d)(?=\b\d{1,2}[.)]\s+[A-Z])', part)
+            if len(segments2) > 1:
+                result.extend([s.strip() for s in segments2 if s.strip()])
+            else:
+                result.append(part)
+
+    return result
+
+
 def extract_medications(all_text: str) -> List[MedicationAlert]:
     alerts: List[MedicationAlert] = []
-    lines = [ln.strip() for ln in all_text.split("\n") if ln.strip()]
+
+    # Pre-process: split potentially single-line OCR text into per-drug segments
+    lines = _split_text_into_drug_segments(all_text)
+
+    # Expanded triggers
+    drug_triggers = ["drug", "medication", "rx", "treatment", "tab", "inj", "cap", "syp", "therapy", "prescript", "dose", "ml", "mg"]
 
     in_drug_section = False
-    
-    # Expanded triggers
-    drug_triggers = ["drug", "medication", "rx", "treatment", "tab", "inj", "cap", "syp", "therapy", "prescript"]
-    
+
     for line in lines:
         lower = line.lower()
-        
-        if any(trig in lower for trig in drug_triggers):
+
+        has_loose_dosage = re.search(r'\d+\s*(?:ml|mg|g|mcg|cc|drops?)', lower)
+        has_loose_freq = any(f.lower() in lower for f in FREQ_CANON.keys())
+        has_trigger = any(trig in lower for trig in drug_triggers)
+
+        if any(trig in lower for trig in ["drug chart", "medication", "rx"]):
             in_drug_section = True
-            
-        if not in_drug_section:
-            # We enforce fallback.
-            # If line has a dosage AND a frequency, we likely ARE in a drug section even without an explicit header.
-            dose_match_pre = DOSE_RE.search(line)
-            if dose_match_pre and _canon_freq(line):
-                in_drug_section = True
-            else:
-                continue
+
+        if not in_drug_section and not (has_loose_dosage or has_loose_freq or has_trigger):
+            continue
 
         dose_match = DOSE_RE.search(line)
-        dosage_raw = dose_match.group("dose") if dose_match else None
+        if dose_match:
+            dosage_raw = dose_match.group("dose")
+        else:
+            loose_dose = re.search(r'(\d+(?:\.\d+)?\s*(?:ml|mg|g|mcg|cc))', line, re.IGNORECASE)
+            dosage_raw = loose_dose.group(1) if loose_dose else None
 
         duration_days: Optional[int] = None
         dur_match = DURATION_RE.search(line)
@@ -329,20 +395,30 @@ def extract_medications(all_text: str) -> List[MedicationAlert]:
 
         freq_raw = _canon_freq(line)
 
-        scrubbed = line
-        if dosage_raw:
-            scrubbed = scrubbed.replace(dosage_raw, " ")
-        scrubbed = DOSE_RE.sub(" ", scrubbed)
-        scrubbed = DURATION_RE.sub(" ", scrubbed)
-        scrubbed = re.sub(r"\b(?:TAB|CAP|SYP|INJ|DROPS?|OINTMENT|CREAM|LOTION)\b", " ", scrubbed, flags=re.IGNORECASE)
-        scrubbed = re.sub(r"\b(?:OD|BD|TID|TDS|QID|QDS|HS|SOS|PRN|QD|BID|STAT|DAILY)\b", " ", scrubbed, flags=re.IGNORECASE)
-        scrubbed = " ".join(scrubbed.split()).strip()
-        
-        # Exclude common headers that get pulled as drugs
-        if scrubbed.lower() in ["medications", "drug chart", "prescriptions", "rx", "treatment", "tab", "inj"]:
-            continue
-            
-        drug_name_raw = scrubbed if scrubbed else None
+        # ── Drug name: grab only the 1-3 capitalised words BEFORE the dosage ──
+        drug_name_raw = None
+
+        # Find where the dosage starts in the original line
+        dose_pos_match = re.search(r'\d+(?:\.\d+)?\s*(?:mg|ml|g|mcg|cc|drops?|units?)\b', line, re.IGNORECASE)
+        if dose_pos_match:
+            before_dose = line[:dose_pos_match.start()].strip()
+            # Keep only the LAST 1-3 meaningful words before the dosage
+            tokens = [t for t in re.split(r'[\s,;.()&@#%!*\[\]{}]+', before_dose) if re.search(r'[a-zA-Z]{2,}', t)]
+            # Skip generic noise/header words
+            skip_words = {'tab', 'cap', 'inj', 'syp', 'the', 'and', 'for', 'use', 'with', 'rx', 'no', 'of'}
+            tokens = [t for t in tokens if t.lower() not in skip_words]
+            if tokens:
+                # Take the last 1-3 tokens (most likely to be drug name)
+                drug_name_raw = " ".join(tokens[-3:]).strip()
+
+        # Fallback: if no dosage was found, use first 1-3 meaningful words of the line
+        if not drug_name_raw:
+            tokens = [t for t in re.split(r'[\s,;.()&@#%!*\[\]{}]+', line) if re.search(r'[a-zA-Z]{2,}', t)]
+            skip_words = {'tab', 'cap', 'inj', 'syp', 'the', 'and', 'for', 'use', 'with', 'rx', 'no', 'of',
+                          'drug', 'medication', 'prescription', 'chart', 'date', 'name', 'ward', 'diagnosis'}
+            tokens = [t for t in tokens if t.lower() not in skip_words]
+            if tokens:
+                drug_name_raw = " ".join(tokens[:2]).strip()
 
         def safe_or_unclear(value: Optional[str]) -> str:
             if not value:
@@ -772,11 +848,16 @@ def build_evaluation_block(
     }
 
 
-def run_pipeline(pdf_bytes: bytes, filename: str) -> ProcessResult:
-    page_texts, used_ocr, empty_pages, ocr_error, ocr_avg_word_confidence = extract_text_pdf(
-        pdf_bytes
+def run_pipeline(file_bytes: bytes, filename: str) -> ProcessResult:
+    page_texts, used_ocr, empty_pages, ocr_error, ocr_avg_word_confidence = extract_text_file(
+        file_bytes, filename
     )
     all_text = "\n".join(page_texts)
+
+    with open("ocr_debug.txt", "w", encoding="utf-8") as f:
+        f.write("--- OCR TEXT OUTPUT ---\n")
+        f.write(all_text)
+        f.write("\n-----------------------\n")
 
     alerts = extract_medications(all_text)
     mrd_items = audit_mrd(page_texts)
@@ -837,8 +918,9 @@ def to_mrd_only(result: ProcessResult) -> MRDAuditResult:
 
 @app.post("/process", response_model=ProcessResult)
 async def process_document(file: UploadFile = File(...)):
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    valid_ext = (".pdf", ".jpg", ".jpeg", ".png")
+    if not file.filename.lower().endswith(valid_ext):
+        raise HTTPException(status_code=400, detail="Supported files: PDF, JPG, JPEG, PNG.")
 
     pdf_bytes = await file.read()
     if not pdf_bytes:
@@ -849,8 +931,9 @@ async def process_document(file: UploadFile = File(...)):
 
 @app.post("/process/alerts", response_model=NursingAlertsResult)
 async def process_document_alerts(file: UploadFile = File(...)):
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    valid_ext = (".pdf", ".jpg", ".jpeg", ".png")
+    if not file.filename.lower().endswith(valid_ext):
+        raise HTTPException(status_code=400, detail="Supported files: PDF, JPG, JPEG, PNG.")
 
     pdf_bytes = await file.read()
     if not pdf_bytes:
@@ -861,8 +944,9 @@ async def process_document_alerts(file: UploadFile = File(...)):
 
 @app.post("/process/mrd", response_model=MRDAuditResult)
 async def process_document_mrd(file: UploadFile = File(...)):
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    valid_ext = (".pdf", ".jpg", ".jpeg", ".png")
+    if not file.filename.lower().endswith(valid_ext):
+        raise HTTPException(status_code=400, detail="Supported files: PDF, JPG, JPEG, PNG.")
 
     pdf_bytes = await file.read()
     if not pdf_bytes:

@@ -1,0 +1,46 @@
+﻿1016:           <select id="langSelect" style="background:transparent;border:none;color:#e2e8f0;font-size:0.9rem;font-weight:600;cursor:pointer;outline:none;padding-right:8px;">
+1017: 
+1018:             <option value="en">English</option>
+1019: 
+1020:             <option value="hi">à¤¹à¤¿à¤‚à¤¦à¥€</option>
+1021: 
+1022:             <option value="kn">à²•à²¨à³à²¨à²¡</option>
+1023: 
+1024:           </select>
+1025: 
+1026:         </div>
+1027: 
+1028:       </div>
+1029: 
+1030:     </div>
+1031: 
+1032: 
+1033: 
+1034:     <!-- Stats Cards -->
+1035: 
+1036:     <div class="stats-row">
+1037: 
+1038:       <div class="stat-card">
+1039: 
+1040:         <div class="stat-icon">ðŸ’Š</div>
+1041: 
+1042:         <div class="stat-value" id="statDrugs">â€”</div>
+1043: 
+1044:         <div class="stat-label" data-i18n="stat_drugs">Drugs Detected</div>
+1045: 
+1046:       </div>
+1047: 
+1048:       <div class="stat-card">
+1049: 
+1050:         <div class="stat-icon">ðŸ“‹</div>
+1051: 
+1052:         <div class="stat-value" id="statMrd">â€”</div>
+1053: 
+1054:         <div class="stat-label" data-i18n="stat_mrd">MRD Items Checked</div>
+1055: 
+1056:       </div>
+1057: 
+1058:       <div class="stat-card">
+1059: 
+1060:         <div class="stat-icon">âš ï¸</div>
+1061: 
